@@ -1,4 +1,4 @@
-package parquet.write
+package test.parquet.write
 
 class ParquetIndexWriter {
 
