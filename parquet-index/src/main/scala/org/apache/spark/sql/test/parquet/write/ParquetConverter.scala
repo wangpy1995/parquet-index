@@ -1,4 +1,4 @@
-package test.parquet.write
+package org.apache.spark.sql.test.parquet.write
 
 import java.io.InputStream
 

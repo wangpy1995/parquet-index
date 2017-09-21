@@ -1,7 +1,7 @@
-package test.parquet.read
+package org.apache.spark.sql.test.parquet.read
 
 import org.scalatest.FunSuite
-import test.parquet._
+import org.apache.spark.sql.test.parquet._
 import ss.implicits._
 class DefaultReadTestSuite extends FunSuite {
   test("default_read") {
@@ -16,7 +16,7 @@ class DefaultReadTestSuite extends FunSuite {
       """.stripMargin)*/
     ss.sql(
       """
-        |SELECT * FROM d
+        |SELECT * FROM d WHERE value in (4,5)
       """.stripMargin).show()
   }
 }

@@ -1,4 +1,4 @@
-package test
+package org.apache.spark.sql.test
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession

@@ -1,8 +1,7 @@
 package test.other
 
-import org.apache.spark.Partitioner
+import org.apache.spark.sql.SparkSession
 import org.scalatest.FunSuite
-import test.parquet._
 
 import scala.collection.{immutable, mutable}
 import scala.io.StdIn
@@ -14,6 +13,7 @@ class RDDActionTestSuite extends FunSuite {
       val key = data % 2
       Map(key->data)
     }*/
+    val ss = SparkSession.builder().getOrCreate()
     ss.sparkContext.parallelize(testData, 10).map(data => (data % 2, data)).mapPartitions { datas =>
       new MyIterator[Int, Int](datas).combineByKey()
     }.foreach(println)
