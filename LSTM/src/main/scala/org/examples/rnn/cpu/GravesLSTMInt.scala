@@ -7,9 +7,8 @@ import java.nio.file.Files
 import org.apache.commons.logging.LogFactory
 import org.deeplearning4j.datasets.iterator.DoublesDataSetIterator
 import org.deeplearning4j.nn.api.OptimizationAlgorithm
-import org.deeplearning4j.nn.conf.{BackpropType, NeuralNetConfiguration, Updater}
 import org.deeplearning4j.nn.conf.layers.{GravesLSTM, RnnOutputLayer}
-import org.deeplearning4j.nn.graph.ComputationGraph
+import org.deeplearning4j.nn.conf.{BackpropType, NeuralNetConfiguration, Updater}
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.nn.weights.WeightInit
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener
@@ -17,8 +16,7 @@ import org.nd4j.linalg.activations.Activation
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction
 
-import scala.util.Random
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 
 class GravesLSTMInt
 
@@ -60,7 +58,7 @@ object GravesLSTMInt {
         .activation(Activation.TANH).build())
       .layer(2, new RnnOutputLayer.Builder(LossFunction.MCXENT).activation(Activation.SOFTMAX) //MCXENT + softmax for classification
         .nIn(lstmLayerSize).nOut(nOut).build())
-      .backpropType(BackpropType.Standard).tBPTTForwardLength(tbpttLenth).tBPTTBackwardLength(tbpttLenth)
+      .backpropType(BackpropType.Standard)/*.tBPTTForwardLength(tbpttLenth).tBPTTBackwardLength(tbpttLenth)*/
       .pretrain(false).backprop(true)
       .build()
 

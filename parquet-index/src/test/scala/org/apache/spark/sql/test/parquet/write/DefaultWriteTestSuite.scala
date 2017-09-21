@@ -1,28 +1,25 @@
 package org.apache.spark.sql.test.parquet.write
 
-import java.io.{FileNotFoundException, IOException}
-
 import org.apache.commons.logging.LogFactory
 import org.apache.hadoop.fs._
-import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.rdd.{InputFileBlockHolder, RDD}
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable}
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.vectorized.ColumnarBatch
 import org.apache.spark.sql.sources.In
 import org.apache.spark.sql.test.parquet._
 import org.apache.spark.sql.test.parquet.ss.implicits._
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.apache.spark.util.NextIterator
+import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.{Partition, TaskContext}
 import org.scalatest.FunSuite
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.io.StdIn
 
 class DefaultWriteTestSuite extends FunSuite {
   private lazy val log = LogFactory.getLog(classOf[DefaultWriteTestSuite])
@@ -171,59 +168,108 @@ class DefaultWriteTestSuite extends FunSuite {
   }
 
   test("file") {
-    def getBlockLocations(file: FileStatus): Array[BlockLocation] = file match {
-      case f: LocatedFileStatus => f.getBlockLocations
-      case f => Array.empty[BlockLocation]
-    }
 
-    def getBlockHosts(
-                       blockLocations: Array[BlockLocation], offset: Long, length: Long): Array[String] = {
-      val candidates = blockLocations.map {
-        // The fragment starts from a position within this block
-        case b if b.getOffset <= offset && offset < b.getOffset + b.getLength =>
-          b.getHosts -> (b.getOffset + b.getLength - offset).min(length)
-
-        // The fragment ends at a position within this block
-        case b if offset <= b.getOffset && offset + length < b.getLength =>
-          b.getHosts -> (offset + length - b.getOffset).min(length)
-
-        // The fragment fully contains this block
-        case b if offset <= b.getOffset && b.getOffset + b.getLength <= offset + length =>
-          b.getHosts -> b.getLength
-
-        // The fragment doesn't intersect with this block
-        case b =>
-          b.getHosts -> 0L
-      }.filter { case (hosts, size) =>
-        size > 0L
-      }
-
-      if (candidates.isEmpty) {
-        Array.empty[String]
-      } else {
-        val (hosts, _) = candidates.maxBy { case (_, size) => size }
-        hosts
-      }
-    }
-
+    SparkSession.setActiveSession(ss)
     val hadoopConf = ss.sessionState.newHadoopConf()
-    val format = new ParquetFileFormat
+
+    val format = DataSource.lookupDataSource("parquet").newInstance().asInstanceOf[FileFormat]
+
     val dataSchema = StructType(Seq(StructField("value", StringType)))
     val partitionSchema = StructType(Seq(StructField("key", IntegerType)))
-    val filter = In("value", Array(4, 5))
-    val readFunc = format.buildReaderWithPartitionValues(ss, dataSchema, partitionSchema, dataSchema, Seq(filter), Map.empty[String, String], hadoopConf)
+    val schema = StructType(Seq(StructField("key", IntegerType), StructField("value", StringType)))
 
-    val options = Map.empty[String, String]
+    val filter = In("key", Array("1", "2"))
+    val readFunc = format.buildReaderWithPartitionValues(ss, dataSchema, partitionSchema, schema, Seq(filter), Map.empty[String, String], hadoopConf)
 
     val fs = FileSystem.get(hadoopConf)
-    val selectedPartitions = fs.listStatus(new Path(path)).map { derectory =>
-      val v = InternalRow(derectory.getPath.getName.split("=").last.toInt)
-      val f = fs.listLocatedStatus(derectory.getPath)
+    val selectedPartitions = fs.listStatus(new Path(path)).map { directory =>
+      val v = InternalRow.fromSeq(Seq(directory.getPath.getName.split("=").last.toInt))
+      val f = fs.listLocatedStatus(directory.getPath)
       val arr = ArrayBuffer.empty[LocatedFileStatus]
       while (f.hasNext) arr += f.next()
       PartitionDirectory(v, arr)
     }
 
+    val options = Map.empty[String, String]
+    format.inferSchema(ss, options,selectedPartitions.flatMap(_.files))
+    val rdd = createRDD(readFunc, selectedPartitions, format,options)
+
+    val needsUnsafeRowConversion: Boolean = if (format.isInstanceOf[ParquetFileFormat]) {
+      SparkSession.getActiveSession.get.sessionState.conf.parquetVectorizedReaderEnabled
+    } else {
+      false
+    }
+   val scan =  if (needsUnsafeRowConversion) {
+     rdd.mapPartitionsWithIndexInternal { (index, iter) =>
+       val proj = UnsafeProjection.create(schema)
+       proj.initialize(index)
+       iter.map(proj)
+     }
+   }else rdd
+    /*val (ctx, cleanedSource) = {
+      val c = new CodegenContext
+      (c,CodeFormatter.stripOverlappingComments(
+        new CodeAndComment(CodeFormatter.stripExtraNewLines(""), c.getPlaceHolderToComments())))
+    }
+    val references=ctx.references.toArray
+    rdd.mapPartitionsWithIndex{(index,iter)=>
+      val clazz = CodeGenerator.compile(cleanedSource)
+      val buffer = clazz.generate(references).asInstanceOf[BufferedRowIterator]
+      buffer.init(index, Array(iter))
+      new Iterator[InternalRow]{
+        override def hasNext = buffer.hasNext
+
+        override def next() = buffer.next()
+      }
+    }*/
+    try {
+      val arr = scan.collect()
+      println(arr)
+    } finally {
+      StdIn.readLine()
+    }
+  }
+
+  def getBlockLocations(file: FileStatus): Array[BlockLocation] = file match {
+    case f: LocatedFileStatus => f.getBlockLocations
+    case f => Array.empty[BlockLocation]
+  }
+
+  def getBlockHosts(
+                     blockLocations: Array[BlockLocation], offset: Long, length: Long): Array[String] = {
+    val candidates = blockLocations.map {
+      // The fragment starts from a position within this block
+      case b if b.getOffset <= offset && offset < b.getOffset + b.getLength =>
+        b.getHosts -> (b.getOffset + b.getLength - offset).min(length)
+
+      // The fragment ends at a position within this block
+      case b if offset <= b.getOffset && offset + length < b.getLength =>
+        b.getHosts -> (offset + length - b.getOffset).min(length)
+
+      // The fragment fully contains this block
+      case b if offset <= b.getOffset && b.getOffset + b.getLength <= offset + length =>
+        b.getHosts -> b.getLength
+
+      // The fragment doesn't intersect with this block
+      case b =>
+        b.getHosts -> 0L
+    }.filter { case (hosts, size) =>
+      size > 0L
+    }
+
+    if (candidates.isEmpty) {
+      Array.empty[String]
+    } else {
+      val (hosts, _) = candidates.maxBy { case (_, size) => size }
+      hosts
+    }
+  }
+
+  def createRDD(
+                 readFile: (PartitionedFile) => Iterator[InternalRow],
+                 selectedPartitions: Seq[PartitionDirectory],
+                 format: FileFormat,
+                 options: Map[String, String]) = {
     val defaultMaxSplitBytes = ss.sessionState.conf.filesMaxPartitionBytes
     val openCostInBytes = ss.sessionState.conf.filesOpenCostInBytes
     val defaultParallelism = ss.sparkContext.defaultParallelism
@@ -251,13 +297,10 @@ class DefaultWriteTestSuite extends FunSuite {
       }
     }.sortBy(_.length)(implicitly[Ordering[Long]].reverse)
 
-    //    val partitions = splitFiles.zipWithIndex.map(fp => FilePartition(fp._2, Seq(fp._1)))
-
     val partitions = new ArrayBuffer[FilePartition]
     val currentFiles = new ArrayBuffer[PartitionedFile]
     var currentSize = 0L
 
-    /** Close the current partition and move to the next. */
     def closePartition(): Unit = {
       if (currentFiles.nonEmpty) {
         val newPartition =
@@ -279,9 +322,18 @@ class DefaultWriteTestSuite extends FunSuite {
       currentFiles += file
     }
     closePartition()
-    val rdd = new FileScanRDD(ss, readFunc, partitions)
-    val arr = rdd.collect()
-    arr
+    new FileScanRDD(ss, readFile, partitions)
   }
+}
+
+class SimpleFileScanRDD(@transient private val sparkSession: SparkSession,
+                        readFunction: (PartitionedFile) => Iterator[InternalRow],
+                        @transient val filePartitions: Seq[FilePartition]) extends RDD[InternalRow](ss.sparkContext, Nil) {
+  override def compute(split: Partition, context: TaskContext) = {
+    val parts = split.asInstanceOf[FilePartition].files.iterator
+    parts.flatMap(readFunction)
+  }
+
+  override protected def getPartitions = filePartitions.toArray
 }
 
