@@ -1,31 +1,23 @@
 package org.apache.spark.sql.test.parquet.write
 
 import org.apache.commons.logging.LogFactory
-import org.apache.hadoop.fs._
-import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
-import org.apache.spark.sql.catalyst.catalog._
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
 import org.apache.spark.sql.catalyst.expressions.objects.CreateExternalRow
-import org.apache.spark.sql.catalyst.plans.logical.CatalystSerde
-import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
-import org.apache.spark.sql.execution.{FileSourceScanExec, WholeStageCodegenExec}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.execution.WholeStageCodegenExec
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.parqeut.read.{GeneratedIterator, ParquetSourceStrategy, SparkParquet}
 import org.apache.spark.sql.sources.In
 import org.apache.spark.sql.test.parquet._
 import org.apache.spark.sql.test.parquet.ss.implicits._
-import org.apache.spark.sql.types.DecimalType.Expression
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.{Partition, TaskContext}
 import org.scalatest.FunSuite
 
-import scala.collection.mutable.ArrayBuffer
 import scala.io.StdIn
 
 class DefaultWriteTestSuite extends FunSuite {
@@ -55,31 +47,28 @@ class DefaultWriteTestSuite extends FunSuite {
         options = table.storage.properties ++ pathOption,
         catalogTable = Some(table))
     val plan = LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
-
-    val schema = StructType(Seq(StructField("key", IntegerType), StructField("value", StringType)))
-
-        val deserializer = CreateExternalRow(Seq(AttributeReference("key", IntegerType)(), AttributeReference("value", StringType)()), schema)
-//    val deserializer = df.exprEnc.deserializer
-    val output = df.logicalPlan.output
+    val output = plan.output
+    val deserializer = CreateExternalRow(plan.output, plan.schema)
 
     val pl = ParquetSourceStrategy(plan)
-    val x = pl.map { p =>
+    val x = pl.flatMap { p =>
       val rdd = WholeStageCodegenExec(p).execute()
         .mapPartitionsWithIndexInternal { (index, iter) =>
-        val projection = GenerateSafeProjection.generate(deserializer.children)
+        val projection = GenerateSafeProjection.generate(deserializer :: Nil, output)
         projection.initialize(index)
         iter.map(projection)
       }
-      rdd
-    }.map(_.collect())
-    x
+      rdd.collect()
+      rdd.collect()
+    }
+    println(x.mkString(","))
   }
 
   test("file") {
     val dataSchema = StructType(Seq(StructField("value", StringType)))
     val partitionSchema = StructType(Seq(StructField("key", IntegerType)))
     val schema = StructType(Seq(StructField("key", IntegerType), StructField("value", StringType)))
-    val filters = Seq(In("key", Array("1", "2")))
+    val filters = Seq(In("key", Array(1, 2)))
 
     val sp = new SparkParquet(ss)
     val scan = sp.createNonBucketFileScanRDD("parquet", dataSchema, partitionSchema, schema, filters, path)

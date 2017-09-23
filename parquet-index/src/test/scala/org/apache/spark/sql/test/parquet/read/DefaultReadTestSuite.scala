@@ -17,8 +17,13 @@ class DefaultReadTestSuite extends FunSuite {
       """.stripMargin)*/
     ss.sql(
       """
-        |SELECT * FROM df WHERE key in (1,2)
-      """.stripMargin).rdd.count()
+        |SELECT * FROM df WHERE key=1 AND value in ('a','b')
+      """.stripMargin).show()
+
+    ss.sql(
+      """
+        |SELECT * FROM df WHERE key=1 AND value in ('a','b')
+      """.stripMargin).show()
     StdIn.readLine()
   }
 }
