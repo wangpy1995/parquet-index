@@ -5,12 +5,11 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
 import org.apache.spark.sql.catalyst.expressions.objects.CreateExternalRow
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.WholeStageCodegenExec
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.metric.SQLMetrics
-import org.apache.spark.sql.parqeut.read.{GeneratedIterator, ParquetSourceStrategy, SparkParquet}
+import org.apache.spark.sql.execution.vectorized.ColumnarBatch
+import org.apache.spark.sql.parqeut.read.{ParquetSourceStrategy, SparkParquet}
 import org.apache.spark.sql.sources.In
 import org.apache.spark.sql.test.parquet._
 import org.apache.spark.sql.test.parquet.ss.implicits._
@@ -38,8 +37,6 @@ class DefaultWriteTestSuite extends FunSuite {
     val dataSource =
       DataSource(
         ss,
-        // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
-        // inferred at runtime. We should still support it.
         userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
         partitionColumns = table.partitionColumnNames,
         bucketSpec = table.bucketSpec,
@@ -54,10 +51,10 @@ class DefaultWriteTestSuite extends FunSuite {
     val x = pl.flatMap { p =>
       val rdd = WholeStageCodegenExec(p).execute()
         .mapPartitionsWithIndexInternal { (index, iter) =>
-        val projection = GenerateSafeProjection.generate(deserializer :: Nil, output)
-        projection.initialize(index)
-        iter.map(projection)
-      }
+          val projection = GenerateSafeProjection.generate(deserializer :: Nil, output)
+          projection.initialize(index)
+          iter.map(projection)
+        }
       rdd.collect()
       rdd.collect()
     }
@@ -72,7 +69,7 @@ class DefaultWriteTestSuite extends FunSuite {
 
     val sp = new SparkParquet(ss)
     val scan = sp.createNonBucketFileScanRDD("parquet", dataSchema, partitionSchema, schema, filters, path)
-      .mapPartitionsWithIndexInternal { (index, iter) =>
+      /*.mapPartitionsWithIndexInternal { (index, iter) =>
         val buffer = new GeneratedIterator(Array(SQLMetrics.createMetric(ss.sparkContext, "number of output rows"), SQLMetrics.createTimingMetric(ss.sparkContext, "scan time total (min, med, max)")))
         buffer.init(index, Array(iter))
         new Iterator[InternalRow] {
@@ -86,6 +83,19 @@ class DefaultWriteTestSuite extends FunSuite {
       val projection = GenerateSafeProjection.generate(deserializer :: Nil, attributes)
       projection.initialize(index)
       iter.map(projection)
+    }*/
+      .mapPartitionsInternal { row =>
+      val iter = row.asInstanceOf[Iterator[ColumnarBatch]]
+      iter.flatMap { columns =>
+        val buffer = new BufferedColumnIterator(columns)
+        new Iterator[InternalRow] {
+          override def hasNext = buffer.hasNext
+
+          override def next() = buffer.next
+        }
+      }
+    }.map { r =>
+      r
     }
     try {
       val arr = scan.collect()
@@ -107,3 +117,11 @@ class SimpleFileScanRDD(@transient private val sparkSession: SparkSession,
   override protected def getPartitions = filePartitions.toArray
 }
 
+
+class BufferedColumnIterator(iter: ColumnarBatch) {
+  val it = iter.rowIterator()
+
+  def hasNext = it.hasNext
+
+  def next = it.next().copy()
+}
