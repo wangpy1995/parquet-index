@@ -15,9 +15,11 @@ class DefaultReadTestSuite extends FunSuite {
         |INSERT OVERWRITE TABLE df
         |SELECT * FROM d
       """.stripMargin)*/
+
+    def arr = (0 to 60000).mkString(",")
     ss.sql(
-      """
-        |SELECT * FROM df WHERE key=1 AND value in ('a','b')
+      s"""
+        |SELECT * FROM df WHERE key=1 AND value in ($arr)
       """.stripMargin).show()
 
     ss.sql(

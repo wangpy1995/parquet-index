@@ -2,16 +2,18 @@ package org.apache.spark.sql.test.parquet.write
 
 import org.apache.commons.logging.LogFactory
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateSafeProjection
 import org.apache.spark.sql.catalyst.expressions.objects.CreateExternalRow
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Literal}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
-import org.apache.spark.sql.execution.WholeStageCodegenExec
+import org.apache.spark.sql.execution.{QueryExecution, WholeStageCodegenExec}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.metric.SQLMetrics
+import org.apache.spark.sql.execution.vectorized.ColumnarBatch
 import org.apache.spark.sql.parqeut.read.{GeneratedIterator, ParquetSourceStrategy, SparkParquet}
-import org.apache.spark.sql.sources.In
+import org.apache.spark.sql.sources.{EqualTo, In}
 import org.apache.spark.sql.test.parquet._
 import org.apache.spark.sql.test.parquet.ss.implicits._
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
@@ -46,46 +48,49 @@ class DefaultWriteTestSuite extends FunSuite {
         className = "parquet",
         options = table.storage.properties ++ pathOption,
         catalogTable = Some(table))
-    val plan = LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
-    val output = plan.output
-    val deserializer = CreateExternalRow(plan.output, plan.schema)
-
-    val pl = ParquetSourceStrategy(plan)
-    val x = pl.flatMap { p =>
-      val rdd = WholeStageCodegenExec(p).execute()
-        .mapPartitionsWithIndexInternal { (index, iter) =>
-        val projection = GenerateSafeProjection.generate(deserializer :: Nil, output)
-        projection.initialize(index)
-        iter.map(projection)
+    val logicalRelation = LogicalRelation(dataSource.resolveRelation(checkFilesExist = false), table)
+    ss.sessionState.executePlan(logicalRelation).sparkPlan
+    val plan0 = ParquetSourceStrategy(ss.sessionState.executePlan(logicalRelation).optimizedPlan)
+    val plan1 = ParquetSourceStrategy(ss.sessionState.executePlan(logicalRelation).optimizedPlan)
+ val x : LogicalPlan =>Seq[RDD[InternalRow]]= plan =>{
+      val output = plan.output
+      val deserializer = CreateExternalRow(plan.output, plan.schema)
+      val pl = ParquetSourceStrategy(plan)
+      pl.flatMap { p =>
+        val rdd = WholeStageCodegenExec(p).execute()
+          .mapPartitionsWithIndexInternal { (index, iter) =>
+            val projection = GenerateSafeProjection.generate(deserializer :: Nil, output)
+            projection.initialize(index)
+            iter.map(projection)
+          }
+        Iterator(rdd)
       }
-      rdd.collect()
-      rdd.collect()
     }
-    println(x.mkString(","))
+    /*println(x(plan0).map(_.collect().mkString(",")))
+    println(x(plan1).map(_.collect().mkString(",")))*/
   }
 
   test("file") {
     val dataSchema = StructType(Seq(StructField("value", StringType)))
     val partitionSchema = StructType(Seq(StructField("key", IntegerType)))
-    val schema = StructType(Seq(StructField("key", IntegerType), StructField("value", StringType)))
-    val filters = Seq(In("key", Array(1, 2)))
+    val schema = StructType(Seq(StructField("value", StringType)))
+    val filters = Array("a", "b").map(c=>EqualTo("value",c))
 
     val sp = new SparkParquet(ss)
     val scan = sp.createNonBucketFileScanRDD("parquet", dataSchema, partitionSchema, schema, filters, path)
-      .mapPartitionsWithIndexInternal { (index, iter) =>
-        val buffer = new GeneratedIterator(Array(SQLMetrics.createMetric(ss.sparkContext, "number of output rows"), SQLMetrics.createTimingMetric(ss.sparkContext, "scan time total (min, med, max)")))
-        buffer.init(index, Array(iter))
-        new Iterator[InternalRow] {
-          override def hasNext: Boolean = buffer.hasNext
+      .mapPartitionsInternal { iter =>
+        val columns = iter.asInstanceOf[Iterator[ColumnarBatch]]
+        columns.flatMap { col =>
+          new Iterator[InternalRow] {
+            private val it = col.rowIterator()
 
-          override def next: InternalRow = buffer.next()
+            override def hasNext = it.hasNext
+
+            override def next() = it.next().copy()
+          }
         }
-      }.mapPartitionsWithIndexInternal { (index, iter) =>
-      val attributes = Seq[Attribute](AttributeReference("key", IntegerType)(), AttributeReference("value", StringType)())
-      val deserializer = CreateExternalRow(attributes, schema)
-      val projection = GenerateSafeProjection.generate(deserializer :: Nil, attributes)
-      projection.initialize(index)
-      iter.map(projection)
+      }.map { r =>
+      r
     }
     try {
       val arr = scan.collect()
@@ -94,6 +99,7 @@ class DefaultWriteTestSuite extends FunSuite {
       StdIn.readLine()
     }
   }
+
 }
 
 class SimpleFileScanRDD(@transient private val sparkSession: SparkSession,
