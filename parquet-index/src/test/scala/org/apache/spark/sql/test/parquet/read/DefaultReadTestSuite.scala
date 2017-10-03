@@ -4,6 +4,7 @@ import org.apache.spark.sql.test.parquet._
 import org.scalatest.FunSuite
 
 import scala.io.StdIn
+
 class DefaultReadTestSuite extends FunSuite {
   test("default_read") {
     val df = ss.read.parquet(path)
@@ -15,15 +16,33 @@ class DefaultReadTestSuite extends FunSuite {
         |INSERT OVERWRITE TABLE df
         |SELECT * FROM d
       """.stripMargin)*/
-    ss.sql(
-      """
-        |SELECT * FROM df WHERE key=1 AND value in ('a','b')
-      """.stripMargin).show()
+
+    def arr = (0 to 60000).mkString(",")
+
+    /*    ss.sql(
+          s"""
+             |SELECT * FROM df WHERE key=1 AND value in ($arr)
+          """.stripMargin).show()*/
 
     ss.sql(
       """
-        |SELECT * FROM df WHERE key=1 AND value in ('a','b')
-      """.stripMargin).show()
+        |SELECT value FROM df
+        |WHERE key=1 AND value in ('a','b')
+      """.stripMargin).collect()
     StdIn.readLine()
+  }
+
+  test("insert") {
+    val df = ss.read.parquet(path)
+    df.createTempView("df")
+    import ss.implicits._
+    ss.sparkContext.parallelize(Array((1, "x"), (2, "y"))).toDF("key", "value").createOrReplaceTempView("d")
+
+    ss.sql(
+      """
+        |INSERT INTO df PARTITION(key=1)
+        |SELECT value FROM d
+      """.stripMargin)
+
   }
 }
