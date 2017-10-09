@@ -1,5 +1,10 @@
 package org.apache.spark.sql.test.parquet.read
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapreduce.Job
+import org.apache.parquet.example.data.Group
+import org.apache.parquet.hadoop.ParquetInputFormat
+import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.spark.sql.test.parquet._
 import org.scalatest.FunSuite
 
@@ -44,5 +49,17 @@ class DefaultReadTestSuite extends FunSuite {
         |SELECT value FROM d
       """.stripMargin)
 
+  }
+
+  test("format"){
+    val sc = ss.sparkContext
+    val conf  = new Configuration()
+    val job = Job.getInstance(conf)
+    ParquetInputFormat.setReadSupportClass(job,classOf[GroupReadSupport])
+   val rdd = sc.newAPIHadoopRDD(job.getConfiguration,classOf[ParquetInputFormat[Group]],classOf[Void],classOf[Group])
+      .map{kv=>
+        kv._2
+      }
+    rdd.collect()
   }
 }
