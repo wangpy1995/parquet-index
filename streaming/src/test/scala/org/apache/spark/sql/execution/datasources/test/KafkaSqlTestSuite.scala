@@ -17,11 +17,11 @@ class KafkaSqlTestSuite extends FunSuite {
     ss.sql(
       s"""
          |CREATE TEMPORARY VIEW $table(
-         |id string,
+         |id int,
          |name string,
-         |age string
+         |age int
          |)
-         |USING org.apache.spark.sql.execution.datasources.KafkaRelationProvider
+         |USING org.apache.spark.sql.execution.datasources.KafkaDatasource
          |OPTIONS (
          |  topic 'test',
          |  group.id '1',
@@ -55,11 +55,11 @@ object Test{
     ss.sql(
       s"""
          |CREATE TEMPORARY VIEW $table(
-         |id string,
+         |id int,
          |name string,
-         |age string
+         |age int
          |)
-         |USING org.apache.spark.sql.execution.datasources.KafkaRelationProvider
+         |USING org.apache.spark.sql.execution.datasources.KafkaDatasource
          |OPTIONS (
          |  topic 'test',
          |  group.id '1',

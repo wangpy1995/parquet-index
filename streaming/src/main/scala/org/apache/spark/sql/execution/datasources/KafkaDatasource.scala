@@ -16,7 +16,7 @@ import org.apache.spark.sql.execution.datasources.KafkaOption._
 import org.apache.spark.sql.sources.{CreatableRelationProvider, DataSourceRegister, SchemaRelationProvider}
 import org.apache.spark.sql.types.StructType
 
-class KafkaRelationProvider
+class KafkaDatasource
   extends CreatableRelationProvider
     with SchemaRelationProvider
     with DataSourceRegister {
@@ -70,7 +70,7 @@ class KafkaRelationProvider
            options: KafkaOption
           ) = {
     df.foreachPartition { iter =>
-      val producer = new KafkaProducer[Object, String](options.asProperties)
+      val producer = new KafkaProducer[Object, Object](options.asProperties)
       iter.foreach { row =>
         producer.send(new ProducerRecord(options.topic, row.toSeq.mkString("\t")))
       }
@@ -82,7 +82,7 @@ class KafkaRelationProvider
   override def createRelation(sqlContext: SQLContext, parameters: Map[String, String], schema: StructType) = {
     tableSchema = schema
     val options = new KafkaOption(parameters)
-    KafkaRelation(options, schema,save)(sqlContext.sparkSession)
+    KafkaRelation(options, schema, save)(sqlContext.sparkSession)
   }
 }
 
@@ -98,8 +98,8 @@ class KafkaOption private(@transient val parameters: CaseInsensitiveMap[String])
   import collection.JavaConverters._
 
   def asKafkaParams: util.Map[String, Object] = {
-    val kafkaParams = parameters.originalMap ++ Map("auto.offset.reset"-> "none")
-    new java.util.HashMap[String,Object](kafkaParams.asJava)
+    val kafkaParams = parameters.originalMap ++ Map("auto.offset.reset" -> "none")
+    new java.util.HashMap[String, Object](kafkaParams.asJava)
   }
 
   def topic = asProperties.getProperty(TOPIC_NAME)

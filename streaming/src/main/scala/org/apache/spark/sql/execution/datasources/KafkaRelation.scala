@@ -4,12 +4,16 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsume
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.sql._
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types._
 import org.apache.spark.streaming.kafka010.{KafkaRDD, OffsetRange}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 
-case class KafkaRelation(options: KafkaOption, userSpecifiedSchema: StructType, insertFunc: (DataFrame, Option[StructType], KafkaOption) => Unit)(@transient val sparkSession: SparkSession)
+case class KafkaRelation(options: KafkaOption,
+                         userSpecifiedSchema: StructType,
+                         insertFunc: (DataFrame, Option[StructType], KafkaOption) => Unit
+                        )(@transient val sparkSession: SparkSession)
   extends BaseRelation with InsertableRelation with TableScan {
 
   private val consumer = createConsumer()
@@ -23,14 +27,16 @@ case class KafkaRelation(options: KafkaOption, userSpecifiedSchema: StructType, 
 
   override def buildScan() = {
     val availableOffsetRanges = getAvailableOffsetRanges()
-    val rdd = new KafkaRDD[Object, String](
+    val tpes = sparkSession.sparkContext.broadcast(userSpecifiedSchema)
+    val rdd = new KafkaRDD[Object, Object](
       sparkSession.sparkContext,
       options.asKafkaParams,
       availableOffsetRanges.toArray,
       java.util.Collections.emptyMap[TopicPartition, String](),
       true
     ).mapPartitions { records =>
-      records.map(record => Row.fromSeq(record.value().split("\t")))
+      records.map(record =>
+        Row.fromSeq(KafkaRelation.convertString(record.value().asInstanceOf[String].split("\t"),tpes.value)))
     }
     currentOffsets = currentOffsets ++ availableOffsetRanges.map(range => range.topicPartition() -> range.untilOffset)
     rdd
@@ -66,6 +72,24 @@ case class KafkaRelation(options: KafkaOption, userSpecifiedSchema: StructType, 
       consumer.seekToEnd(Set(tp).asJava)
       val latestOffset = consumer.position(tp)
       OffsetRange(tp, earliestOffset, latestOffset)
+    }
+  }
+}
+
+object KafkaRelation extends Serializable{
+  def convertString(src: Seq[String], schema: StructType): Seq[Any] = {
+    schema.zipWithIndex.map { sf =>
+      val i = sf._2
+      sf._1.dataType match {
+        case IntegerType => src(i).toInt
+        case LongType => src(i).toLong
+        case ByteType => src(i).toByte
+        case DoubleType => src(i).toDouble
+        case FloatType => src(i).toFloat
+        case BooleanType => src(i).toBoolean
+        case ShortType => src(i).toShort
+        case _ => UTF8String.fromString(src(i))
+      }
     }
   }
 }
