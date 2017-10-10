@@ -8,12 +8,12 @@ import kafka.common.Topic
 import kafka.utils.ZkUtils
 import kafka.utils.ZkUtils.getDeleteTopicPath
 import org.I0Itec.zkclient.ZkClient
-import KafkaOption._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
-import org.apache.spark.sql.sources.{CreatableRelationProvider, DataSourceRegister, RelationProvider, SchemaRelationProvider}
+import org.apache.spark.sql.execution.datasources.KafkaOption._
+import org.apache.spark.sql.sources.{CreatableRelationProvider, DataSourceRegister, SchemaRelationProvider}
 import org.apache.spark.sql.types.StructType
 
 class KafkaRelationProvider
@@ -24,7 +24,6 @@ class KafkaRelationProvider
   private var tableSchema: StructType = _
 
   override def createRelation(sqlContext: SQLContext, mode: SaveMode, parameters: Map[String, String], data: DataFrame) = {
-    val isCaseSensitive = sqlContext.conf.caseSensitiveAnalysis
     val options = new KafkaOption(parameters)
     val zkClient = options.zkClient
     val zkUtils = ZkUtils(zkClient, JaasUtils.isZkSecurityEnabled)
