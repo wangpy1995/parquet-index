@@ -91,7 +91,9 @@ class KafkaOption private(@transient val parameters: CaseInsensitiveMap[String])
 
   val asProperties: Properties = {
     val properties = new Properties()
-    parameters.originalMap.foreach { case (k, v) => properties.setProperty(k, v) }
+    parameters.originalMap.foreach { case (k, v) =>
+      properties.setProperty(k, v)
+    }
     properties
   }
 

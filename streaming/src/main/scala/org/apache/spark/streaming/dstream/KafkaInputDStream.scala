@@ -12,7 +12,7 @@ import org.apache.spark.streaming.{StreamingContext, Time}
 
 import collection.JavaConverters._
 
-class KafkaInputDStream[K, V](
+/*class KafkaInputDStream[K, V](
                                _ssc: StreamingContext,
                                options: KafkaOption,
                                maxRate: Long
@@ -165,4 +165,4 @@ class KafkaInputDStream[K, V](
     override def publish(rate: Long): Unit = ()
   }
 
-}
+}*/

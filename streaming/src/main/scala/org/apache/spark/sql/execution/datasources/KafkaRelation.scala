@@ -36,7 +36,7 @@ case class KafkaRelation(options: KafkaOption,
       false
     ).mapPartitions { records =>
       records.map(record =>
-        Row.fromSeq(KafkaRelation.convertString(record.value().asInstanceOf[String].split("\t"),broadcastSchema.value)))
+        Row.fromSeq(KafkaRelation.convertString(record.value().asInstanceOf[String].split("\t"), broadcastSchema.value)))
     }
     currentOffsets = currentOffsets ++ availableOffsetRanges.map(range => range.topicPartition() -> range.untilOffset)
     rdd
@@ -52,7 +52,7 @@ case class KafkaRelation(options: KafkaOption,
 
   def fetchTopicPartitions(): Set[TopicPartition] = {
     // Poll to get the latest assigned partitions
-    if(currentOffsets.isEmpty) {
+    if (currentOffsets.isEmpty) {
       try {
         consumer.poll(0)
       } catch {
@@ -69,6 +69,7 @@ case class KafkaRelation(options: KafkaOption,
   def getAvailableOffsetRanges() = {
     val topicPartitions = fetchTopicPartitions()
     topicPartitions.map { tp =>
+      assert(tp != null)
       consumer.seekToBeginning(Set(tp).asJava)
       val earliestOffset = currentOffsets.getOrElse(tp, consumer.position(tp))
       consumer.seekToEnd(Set(tp).asJava)
@@ -78,7 +79,7 @@ case class KafkaRelation(options: KafkaOption,
   }
 }
 
-object KafkaRelation extends Serializable{
+object KafkaRelation extends Serializable {
   def convertString(src: Seq[String], schema: StructType): Seq[Any] = {
     schema.zipWithIndex.map { sf =>
       val i = sf._2
