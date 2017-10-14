@@ -6,7 +6,7 @@ import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetA
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.sql.execution.datasources.KafkaOption
 import org.apache.spark.streaming.kafka010._
-import org.apache.spark.streaming.scheduler.RateController
+import org.apache.spark.streaming.scheduler.{Job, RateController}
 import org.apache.spark.streaming.scheduler.rate.RateEstimator
 import org.apache.spark.streaming.{StreamingContext, Time}
 
@@ -150,6 +150,15 @@ class KafkaInputDStream[K, V](
     })
     Some(rdd)
   }
+
+/*  override def generateJob(time: Time): Option[Job] = {
+    getOrCompute(time) match {
+      case Some(rdd) =>
+        val func = (a: Iterator[ConsumerRecord[K, V]]) => {}
+        val jobFunc = () => _ssc.sparkContext.submitJob(rdd, func, 0 to rdd.getNumPartitions, (_, _) => {}, {})
+        Some(new Job(time, jobFunc))
+    }
+  }*/
 
   private[streaming] class DirectKafkaRateController(id: Int, estimator: RateEstimator)
     extends RateController(id, estimator) {

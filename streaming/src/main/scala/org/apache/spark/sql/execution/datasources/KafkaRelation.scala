@@ -27,16 +27,16 @@ case class KafkaRelation(options: KafkaOption,
 
   override def buildScan() = {
     val availableOffsetRanges = getAvailableOffsetRanges()
-    val tpes = sparkSession.sparkContext.broadcast(userSpecifiedSchema)
+    val broadcastSchema = sparkSession.sparkContext.broadcast(userSpecifiedSchema)
     val rdd = new KafkaRDD[Object, Object](
       sparkSession.sparkContext,
       options.asKafkaParams,
       availableOffsetRanges.toArray,
       java.util.Collections.emptyMap[TopicPartition, String](),
-      true
+      false
     ).mapPartitions { records =>
       records.map(record =>
-        Row.fromSeq(KafkaRelation.convertString(record.value().asInstanceOf[String].split("\t"),tpes.value)))
+        Row.fromSeq(KafkaRelation.convertString(record.value().asInstanceOf[String].split("\t"),broadcastSchema.value)))
     }
     currentOffsets = currentOffsets ++ availableOffsetRanges.map(range => range.topicPartition() -> range.untilOffset)
     rdd
@@ -52,11 +52,13 @@ case class KafkaRelation(options: KafkaOption,
 
   def fetchTopicPartitions(): Set[TopicPartition] = {
     // Poll to get the latest assigned partitions
-    try {
-      consumer.poll(0)
-    } catch {
-      case e: NoOffsetForPartitionException => {
-        e.getMessage
+    if(currentOffsets.isEmpty) {
+      try {
+        consumer.poll(0)
+      } catch {
+        case e: NoOffsetForPartitionException => {
+          e.getMessage
+        }
       }
     }
     val partitions = consumer.assignment()

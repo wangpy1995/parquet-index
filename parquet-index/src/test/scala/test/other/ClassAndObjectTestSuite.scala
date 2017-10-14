@@ -16,10 +16,10 @@ class ClassAndObjectTestSuite extends FunSuite {
     c.innerObject("33333").printIdentifiers
 
     c.innerObject match {
-   /*   case a.InnerObject(x) =>
-        println("a " + x.mkString(","))
-      case b.InnerObject(x) =>
-        println("b " + x.mkString(","))*/
+      /*   case a.InnerObject(x) =>
+           println("a " + x.mkString(","))
+         case b.InnerObject(x) =>
+           println("b " + x.mkString(","))*/
       case c.innerObject(x) =>
         println("c " + x.mkString(","))
       case _ =>
@@ -28,5 +28,17 @@ class ClassAndObjectTestSuite extends FunSuite {
     assert(a.innerObject != b.innerObject)
     assert(a.innerObject != c.innerObject)
     assert(b.innerObject != c.innerObject)
+  }
+
+  test("list") {
+    val a = List(1, 2, 3, 4, 5, 6)
+    val b = List(1)
+    b match {
+      case seq@head :: body :: tail =>
+        seq.foreach(println)
+      case head::Nil =>
+        println(head)
+      case _ =>
+    }
   }
 }

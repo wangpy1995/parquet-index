@@ -1,20 +1,32 @@
 package service
 
-import com.stream.task.SingleTask
-import org.apache.spark.sql.Row
-import org.springframework.web.bind.annotation._
+import javax.ws.rs._
+import javax.ws.rs.core.MediaType
 
+import com.stream.task.SingleTask
+import org.apache.spark.rdd.SimpleRDD
+import org.apache.spark.sql.Row
+import org.springframework.beans.factory.annotation.{Autowired, Qualifier}
+import org.springframework.stereotype.Service
+
+import scala.beans.BeanProperty
 import scala.collection.mutable.ArrayBuffer
 
-@RestController
-@RequestMapping(value = Array("/stream"))
+@Path("/stream")
+@Produces(Array(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML))
+@Consumes(Array(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML))
+@Service("restSimpleService")
 class SimpleController {
 
-  @RequestMapping(value = Array("/admin"))
-  @RequestBody(required = true)
-  @ResponseBody
-  def executeSql(@RequestParam sqlText: String): String = {
-    val df = SimpleService.sql(sqlText)
+  @Autowired
+  @Qualifier("simpleWSService")
+  @BeanProperty  var simpleService: SimpleService = _
+
+  @POST
+  @Path("/admin")
+  @Consumes(Array(MediaType.APPLICATION_JSON))
+  def executeSql(@FormParam("sql") sqlText: String): String = {
+    val df = simpleService.sql(sqlText)
     /*val fieldNames = df.schema.map(_.name)
     val jsons = new JSONArray()
     jsons.fluentAddAll(fieldNames.toList.asJavaCollection)
@@ -22,22 +34,27 @@ class SimpleController {
     df.schema.map(_.name).mkString("\t")
   }
 
-  @RequestMapping(value = Array("/user"))
-  @RequestBody(required = true)
-  @ResponseBody
-  def search(@RequestParam age: Int, @RequestParam tableList: String, @RequestParam requiredParamList: String) = {
+  def sql(sqlText:String) = simpleService.sql(sqlText).rdd
+
+  @POST
+  @Path("/user")
+  @Consumes(Array(MediaType.APPLICATION_FORM_URLENCODED))
+  @Produces(Array(MediaType.APPLICATION_JSON))
+  def search(@FormParam("age") age: Int,
+             @FormParam("tableList") tableList: String,
+             @FormParam("requiredColumns") requiredColumns: String) = {
     val tables = tableList.split(",")
-    val requiredParams = requiredParamList.split(",")
-    val f = (a: Int, b: Row) => if (a == b.getAs[Int]("age")) b else b
+    val requiredParams = requiredColumns.split(",")
+    val f = (a: Int, b: Row) => if (a == b.getAs[Int]("age")) b else null
     val task = new SingleTask[Int, Row](age, f)
     val results = ArrayBuffer.empty[Row]
     /*val inputStream = SimpleService.createDStreams(task, tables.toSeq, requiredParams, results)(f)
     inputStream.foreach(_.foreachRDD(_.foreach(println)))
     results.mkString("\n")*/
-    SimpleService.createRDD(task,tables.toSeq,requiredParams,f)
+    simpleService.createRDD(task, tables.toSeq, requiredParams, f)
   }
 
-  def start = SimpleService.start
+  def start = simpleService.start
 
-  def awaitTermination = SimpleService.awaitTermination
+  def awaitTermination = simpleService.awaitTermination
 }

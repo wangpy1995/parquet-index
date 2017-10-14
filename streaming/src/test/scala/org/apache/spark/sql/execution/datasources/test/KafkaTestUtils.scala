@@ -3,25 +3,26 @@ package org.apache.spark.sql.execution.datasources.test
 import java.io.{File, IOException}
 import java.lang.{Integer => JInt}
 import java.net.InetSocketAddress
-import java.util.{Map => JMap, Properties}
+import java.util.{Properties, Map => JMap}
 import java.util.concurrent.TimeoutException
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
-
 import kafka.admin.AdminUtils
 import kafka.api.Request
+import kafka.producer.Producer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.ZkUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
-
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.Time
 import org.apache.spark.util.Utils
+
+import scala.collection.mutable
 
 /**
   * This is a helper class for Kafka test suites. This has the functionality to set up
@@ -171,13 +172,18 @@ private class KafkaTestUtils extends Logging {
 
   /** Send the array of messages to the Kafka broker */
   def sendMessages(topic: String, messages: Array[String]): Unit = {
-    producer = new KafkaProducer[String, String](producerConfiguration)
+    producer = producerCache.getOrElseUpdate(topic,new KafkaProducer[String, String](producerConfiguration))
     messages.foreach { message =>
       producer.send(new ProducerRecord[String, String](topic, message))
     }
-    producer.close()
-    producer = null
   }
+
+  def closeProducer(topic:String) = {
+    producerCache(topic).close()
+    producerCache.remove(topic)
+  }
+
+  val producerCache = new mutable.HashMap[String,KafkaProducer[String,String]]
 
   private def brokerConfiguration: Properties = {
     val props = new Properties()

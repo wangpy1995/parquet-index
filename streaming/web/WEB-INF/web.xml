@@ -9,15 +9,36 @@
         <welcome-file>index.htm</welcome-file>
         <welcome-file>default.html</welcome-file>
         <welcome-file>default.htm</welcome-file>
-        <welcome-file>default.htm</welcome-file>
         <welcome-file>index.jsp</welcome-file>
     </welcome-file-list>
 
     <context-param>
         <param-name>contextConfigLocation</param-name>
-        <param-value>WEB-INF/applicationContext.xml</param-value>
+        <param-value>
+            classpath:applicationContext-*.xml
+        </param-value>
     </context-param>
 
+    <!-- cxf配置 -->
+    <servlet>
+        <servlet-name>CXFServlet</servlet-name>
+        <servlet-class>org.apache.cxf.transport.servlet.CXFServlet</servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>CXFServlet</servlet-name>
+        <url-pattern>/ws/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- Druid页面监控配置 通过ip:port/face-web/druid可访问 -->
+    <servlet>
+        <servlet-name>DruidStatView</servlet-name>
+        <servlet-class>com.alibaba.druid.support.http.StatViewServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>DruidStatView</servlet-name>
+        <url-pattern>/druid/*</url-pattern>
+    </servlet-mapping>
 
     <!-- 编码均为UTF-8 -->
     <filter>
@@ -28,6 +49,8 @@
             <param-value>utf-8</param-value>
         </init-param>
     </filter>
+
+
 
     <filter-mapping>
         <filter-name>CharacterEncodingFilter</filter-name>
