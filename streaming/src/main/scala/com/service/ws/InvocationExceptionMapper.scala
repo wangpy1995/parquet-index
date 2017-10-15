@@ -1,13 +1,13 @@
-package service.ws
+package com.service.ws
 
 import java.util.Locale
 import javax.ws.rs.core.Response
 import javax.ws.rs.ext.ExceptionMapper
 
 import com.google.gson.GsonBuilder
+import com.service.response.BaseResponse
 import org.slf4j.LoggerFactory
-import service.response.BaseResponse
-import service._
+import com.service._
 
 
 class InvocationExceptionMapper extends ExceptionMapper[Throwable] {

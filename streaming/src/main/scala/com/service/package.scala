@@ -1,3 +1,5 @@
+package com
+
 package object service {
 
   object ErrorCode {

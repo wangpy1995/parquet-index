@@ -10,7 +10,9 @@
     <import resource="classpath:META-INF/cxf/cxf-servlet.xml" />
 
     <bean id = "simpleService" class="com.service.impl.SimpleService"/>
+
     <bean id="restSimpleService" class="com.service.SimpleWebService"/>
+
     <jaxrs:server address="/rest" serviceClass="com.service.SimpleWebService">
         <jaxrs:serviceBeans>
             <ref bean="restSimpleService"/>

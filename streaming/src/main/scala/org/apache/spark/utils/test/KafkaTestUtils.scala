@@ -1,28 +1,27 @@
-package org.apache.spark.sql.execution.datasources.test
+package org.apache.spark.utils.test
 
 import java.io.{File, IOException}
 import java.lang.{Integer => JInt}
 import java.net.InetSocketAddress
-import java.util.{Properties, Map => JMap}
 import java.util.concurrent.TimeoutException
+import java.util.{Properties, Map => JMap}
 
-import scala.annotation.tailrec
-import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import kafka.admin.AdminUtils
 import kafka.api.Request
-import kafka.producer.Producer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.ZkUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.Time
 import org.apache.spark.util.Utils
+import org.apache.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
 
+import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.control.NonFatal
 
 /**
   * This is a helper class for Kafka test suites. This has the functionality to set up
@@ -30,7 +29,7 @@ import scala.collection.mutable
   *
   * The reason to put Kafka test utility class in src is to test Python related Kafka APIs.
   */
-private class KafkaTestUtils extends Logging {
+class KafkaTestUtils extends Logging {
 
   // Zookeeper related configurations
   private val zkHost = "localhost"

@@ -2,13 +2,14 @@ package org.apache.spark.sql.execution.datasources.test
 
 import java.io.{File, FileWriter}
 
+import com.service.SimpleWebService
+import com.service.impl.SimpleService
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.streaming.dstream.SimpleDStream
-import org.apache.spark.streaming.scheduler.StreamingListener
+import org.apache.spark.utils.test.KafkaTestUtils
 import org.scalatest.FunSuite
-import service.{SimpleController, SimpleService}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.StdIn
@@ -58,7 +59,6 @@ object Test {
   private val kafkaTestUtils = new KafkaTestUtils
   kafkaTestUtils.setup()
 
-  //  kafkaTestUtils.sendMessages("test",Array("0\t'a'\t1"))
   def createKafkaTempTable(table: String) = {
     ss.sql(
       s"""
@@ -82,16 +82,14 @@ object Test {
   }
 
   def main(args: Array[String]): Unit = {
-    import service.SimpleService._
+    import SimpleService._
     createKafkaTempTable("KAFKA_STU")
-    val controller = new SimpleController
-    controller.setSimpleService(new SimpleService)
-    val rdds = controller.search(15, "KAFKA_STU", "id,name,age")
+    val controller = new SimpleWebService
+//    controller.setSimpleService(new SimpleService)
     val arr = ArrayBuffer.empty[RDD[Row]]
-    arr ++= rdds
     @volatile var i = 0
     val stream = new SimpleDStream(ssc, arr)
-    val file = new File("/home/wangpengyu6/tmp/stream/kafka_stream")
+    val file = new File("/home/wpy/tmp/stream/kafka_stream")
     if (!file.exists()) file.createNewFile()
     stream.foreachRDD(_.filter(_ != null).foreachPartition { rows =>
       val writer = new FileWriter(file, true)
@@ -117,15 +115,12 @@ object Test {
     new Thread(new Runnable {
       override def run(): Unit = while (true) {
         arr.synchronized {
-          arr += controller.sql(s"select * from KAFKA_STU where age = ${i-1}")
+//          arr += controller.sql(s"select * from KAFKA_STU where age = ${i - 1}")
         }
         Thread.sleep(5000)
       }
     }).start()
     ssc.start()
     ssc.awaitTermination()
-    //    controller.start
-    //    controller.awaitTermination
-
   }
 }

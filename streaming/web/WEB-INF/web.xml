@@ -4,13 +4,6 @@
          xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
          id="WebApp_ID" version="3.0" >
     <display-name>SpringMVC</display-name>
-    <welcome-file-list>
-        <welcome-file>index.html</welcome-file>
-        <welcome-file>index.htm</welcome-file>
-        <welcome-file>default.html</welcome-file>
-        <welcome-file>default.htm</welcome-file>
-        <welcome-file>index.jsp</welcome-file>
-    </welcome-file-list>
 
     <context-param>
         <param-name>contextConfigLocation</param-name>
@@ -68,21 +61,21 @@
     </listener>
 
 
-    <!-- SpringMVC的核心控制器(前端控制器) -->
-    <servlet>
+     <!--SpringMVC的核心控制器(前端控制器) -->
+<!--    <servlet>
         <servlet-name>springMVC</servlet-name>
         <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-        <!-- 启动tomcat服务器时创建此serlvet核心对象 -->
+        &lt;!&ndash; 启动tomcat服务器时创建此serlvet核心对象 &ndash;&gt;
         <load-on-startup>1</load-on-startup>
-    </servlet>
+    </servlet>-->
 
     <!-- 拦截请求，/ 是所有请求 -->
-    <servlet-mapping>
+ <!--   <servlet-mapping>
         <servlet-name>springMVC</servlet-name>
         <url-pattern>/</url-pattern>
-    </servlet-mapping>
+    </servlet-mapping>-->
 
     <welcome-file-list>
-        <welcome-file>/index.jsp</welcome-file>
+        <welcome-file>index.html</welcome-file>
     </welcome-file-list>
 </web-app>
