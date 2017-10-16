@@ -19,6 +19,11 @@ case class KafkaRelation(options: KafkaOption,
   private val consumer = createConsumer()
   private var currentOffsets: Map[TopicPartition, Long] = Map[TopicPartition, Long]()
 
+  private lazy val preferBrokers = if (options.parameters.getOrElse("preferBrokers", true).asInstanceOf[Boolean])
+    getBrokers
+  else
+    java.util.Collections.emptyMap[TopicPartition, String]()
+
   override def sqlContext: SQLContext = sparkSession.sqlContext
 
   override def schema: StructType = userSpecifiedSchema
@@ -32,7 +37,7 @@ case class KafkaRelation(options: KafkaOption,
       sparkSession.sparkContext,
       options.asKafkaParams,
       availableOffsetRanges.toArray,
-      java.util.Collections.emptyMap[TopicPartition, String](),
+      preferBrokers,
       false
     ).mapPartitions { records =>
       records.map(record =>
@@ -48,6 +53,25 @@ case class KafkaRelation(options: KafkaOption,
     val consumer = new KafkaConsumer[Object, String](newKafkaParams)
     consumer.subscribe(Seq(options.topic).asJava)
     consumer
+  }
+
+  def getBrokers = {
+    val c = consumer
+    val result = new java.util.HashMap[TopicPartition, String]()
+    val hosts = new java.util.HashMap[TopicPartition, String]()
+    val assignments = c.assignment().iterator()
+    while (assignments.hasNext()) {
+      val tp: TopicPartition = assignments.next()
+      if (null == hosts.get(tp)) {
+        val infos = c.partitionsFor(tp.topic).iterator()
+        while (infos.hasNext()) {
+          val i = infos.next()
+          hosts.put(new TopicPartition(i.topic(), i.partition()), i.leader.host())
+        }
+      }
+      result.put(tp, hosts.get(tp))
+    }
+    result
   }
 
   def fetchTopicPartitions(): Set[TopicPartition] = {

@@ -1,69 +1,76 @@
 package com.service
 
+import java.util
 import javax.ws.rs._
 import javax.ws.rs.core.MediaType
 
-import com.alibaba.fastjson.{JSON, JSONArray}
-import com.service.impl.SimpleService
+import com.alibaba.fastjson.{JSON, JSONObject}
+import com.service.impl.SimpleImpl
 import com.service.response.BaseResponse
 import org.springframework.web.bind.annotation.RequestParam
 
 //@Service("restSimpleService")
-class SimpleWebService {
-
+class SimpleWebService extends SimpleImpl with SimpleService {
   //  @Autowired
   //  @Qualifier("simpleService")
-  val simpleService: SimpleService = new SimpleService
+  //  val simpleService: SimpleWebServiceImpl = new SimpleWebServiceImpl
 
   @POST
   @Path("/admin")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   @Produces(Array(MediaType.TEXT_PLAIN))
-  def executeSql(@RequestParam sqlText: String): String = {
-    val df = simpleService.sql(sqlText)
-    val jsons = new JSONArray()
-    val response = new BaseResponse()
-    response.setMsg(df.schema.map(_.name).mkString("\t"))
-    response.setResultCode(0)
-    jsons.add(response)
-    jsons.toJSONString
+  def executeSql(@RequestParam sqlText: String): String = tryJSONResponse {
+    val df = sql(sqlText)
+    ("succeed", df.schema.map(_.name))
   }
 
   @GET
   @Path("/sql/{sqlText}")
-  def task(@PathParam("sqlText") sqlText: String): String = tryJSONResponse {
-    simpleService.submitTask(sqlText)
-    "submit task succeed"
+  def submitSqlTask(@PathParam("sqlText") sqlText: String): String = tryJSONResponse {
+    submit(sqlText)
+    ("submit task succeed", null)
   }
 
   @GET
   @Path("/msg/{topic}/{id}/{name}/{age}")
-  def insert(@PathParam("topic") topic: String,
-             @PathParam("id") id: Int,
-             @PathParam("name") name: String,
-             @PathParam("age") age: Int) = tryJSONResponse {
-    simpleService.insert(topic, id, name, age)
-    "insert succeed"
+  def putIntoKafka(@PathParam("topic") topic: String,
+                   @PathParam("id") id: Int,
+                   @PathParam("name") name: String,
+                   @PathParam("age") age: Int) = tryJSONResponse {
+    sendMessage(topic, id, name, age)
+    ("insert succeed", null)
   }
 
   @GET
   @Path("/results")
-  def results() = tryJSONResponse {
-    simpleService.getResults
+  def get() = tryJSONResponse {
+    ("get result succeed", getResults)
   }
 
-  private def tryJSONResponse[T](f: => String): String = {
+  private def tryJSONResponse(f: => (String, Seq[String])): String = {
+    import collection.JavaConverters._
     val response = new BaseResponse()
-    try {
-      val msg = f
-      response.setMsg(msg)
+    val str = try {
+      val (msg, data) = f
+      response.setMsg(msg.toString)
       response.setResultCode(ErrorCode.success)
+      if (data == null || data.isEmpty)
+        JSON.toJSONString(response, true)
+      else {
+        val obj = new JSONObject
+        val map = new util.HashMap[String, Object]()
+        map.put("response", response)
+        map.put("data", data.asJavaCollection)
+        obj.fluentPutAll(map)
+        obj.toJSONString
+      }
     } catch {
       case e: Throwable =>
         response.setMsg(e.getCause.getMessage)
         response.setResultCode(ErrorCode.error)
+        JSON.toJSONString(response, true)
     }
-    JSON.toJSONString(response, true)
+    str
   }
 
   /*  def search(@RequestParam("age") age: Int,
@@ -79,10 +86,4 @@ class SimpleWebService {
       results.mkString("\n")*/
       simpleService.createRDD(task, tables.toSeq, requiredParams, f)
     }*/
-
-  @GET
-  @Path("/print")
-  def get(): Unit = {
-    println("xxxxxxxxxxxxxxxx")
-  }
 }

@@ -3,7 +3,7 @@ package org.apache.spark.sql.execution.datasources.test
 import java.io.{File, FileWriter}
 
 import com.service.SimpleWebService
-import com.service.impl.SimpleService
+import com.service.impl.SimpleImpl
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession}
@@ -82,7 +82,7 @@ object Test {
   }
 
   def main(args: Array[String]): Unit = {
-    import SimpleService._
+    import SimpleImpl._
     createKafkaTempTable("KAFKA_STU")
     val controller = new SimpleWebService
 //    controller.setSimpleService(new SimpleService)

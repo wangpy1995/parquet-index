@@ -1,6 +1,7 @@
 package com.service.impl
 
-import com.service.impl.SimpleService._
+import com.service.Simple
+import com.service.impl.SimpleImpl._
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession}
@@ -11,7 +12,9 @@ import org.apache.spark.utils.test.KafkaTestUtils
 import scala.collection.mutable.ArrayBuffer
 
 //@Component("simpleService")
-class SimpleService {
+trait SimpleImpl extends Simple {
+
+  val tmp = ArrayBuffer.empty[String]
 
   def submitTask(sqlText: String) = {
     arr.synchronized {
@@ -19,36 +22,34 @@ class SimpleService {
     }
   }
 
-  def getResults = {
-    val tmp = ArrayBuffer.empty[String]
-    tmp ++= results
-    if (results.nonEmpty)
-      results.clear()
-    tmp.mkString("<br/>")
-  }
-
-  def insert(topic: String, id: Int, name: String, age: Int): Unit = {
+  def sendMessage(topic: String, id: Int, name: String, age: Int): Unit = {
     kafkaTestUtils.sendMessages(topic, Array(id + "\t" + name + "\t" + age))
   }
 
-
   def sql(sqlText: String) = ssc.sql(sqlText)
 
+  def getResults: Array[String] = {
+    tmp ++= results
+    if (results.nonEmpty) results.clear()
+    val res = tmp.toArray
+    tmp.clear()
+    res
+  }
 }
 
-object SimpleService {
+object SimpleImpl {
   private val sparkConf = new SparkConf().setAppName("simple").setMaster("local[*]")
   private val ss = SparkSession.builder().config(sparkConf).getOrCreate()
-  lazy val ssc = new SimpleStreamingContext(ss, Seconds(10))
+  val arr = ArrayBuffer.empty[RDD[Row]]
+  val results = ArrayBuffer.empty[String]
+
+  val ssc = new SimpleStreamingContext(ss, Seconds(10))
 
   private val kafkaTestUtils = new KafkaTestUtils
   kafkaTestUtils.setup()
-
   createKafkaTable("test")
 
-  val arr = ArrayBuffer.empty[RDD[Row]]
   val stream = new SimpleDStream(ssc, arr)
-  val results = ArrayBuffer.empty[String]
   stream.foreachRDD(_.filter(_ != null).foreachPartition {
     _.foreach { row =>
       results += row.toString()

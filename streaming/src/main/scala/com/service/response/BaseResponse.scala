@@ -6,6 +6,6 @@ import scala.beans.BeanProperty
 
 @XmlRootElement
 class BaseResponse {
-  @BeanProperty var resultCode:Int = _
-  @BeanProperty var msg:String = _
+  @BeanProperty var msg: String = _
+  @BeanProperty var resultCode: Int = _
 }
