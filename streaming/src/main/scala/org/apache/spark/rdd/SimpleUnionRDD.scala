@@ -25,24 +25,25 @@ class SimpleUnionRDD[T: ClassTag](
     val simpleUnionPartition = split.asInstanceOf[SimpleUnionPartition]
     simpleUnionPartition
       .partitions
-      .flatMap(p=>rdds(simpleUnionPartition.rddIndex).preferredLocations(p))
+      .flatMap(p => rdds(simpleUnionPartition.rddIndex).preferredLocations(p))
   }
 
   override def compute(split: Partition, context: TaskContext) = {
     val simpleUnionPartition = split.asInstanceOf[SimpleUnionPartition]
     simpleUnionPartition
       .partitions
-      .flatMap(rdds(simpleUnionPartition.rddIndex).compute(_,context))
+      .flatMap(rdds(simpleUnionPartition.rddIndex).compute(_, context))
       .iterator
   }
 
   override protected def getPartitions = {
     var rddIdx = 0
-    rdds.zipWithIndex.map {
-      case (rdd, index) =>
-        val partition = new SimpleUnionPartition(index, rddIdx, rdd.partitions)
-        rddIdx += 1
-        partition
+    var index = 0
+    rdds.map { rdd =>
+      val partition = new SimpleUnionPartition(index, rddIdx, rdd.partitions)
+      rddIdx += 1
+      index += 1
+      partition
     }.toArray
   }
 }

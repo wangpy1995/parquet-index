@@ -103,9 +103,7 @@ object Test {
     })
 
     fileStream.foreachRDD(_.filter(_ != null).foreach { row =>
-      results.synchronized {
-        results += row.toString()
-      }
+        results.add(row.toString())
     })
     ssc.start()
     new Thread(new Runnable {
@@ -123,7 +121,7 @@ object Test {
     new Thread(new Runnable {
       override def run(): Unit = while (true) {
         controller.submitSqlTask(s"select * from test where age = 25")
-        Thread.sleep(1000)
+        Thread.sleep(500)
       }
     }).start()
     ssc.awaitTermination()

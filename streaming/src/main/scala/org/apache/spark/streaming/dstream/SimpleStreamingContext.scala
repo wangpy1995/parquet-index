@@ -1,12 +1,13 @@
 package org.apache.spark.streaming.dstream
 
+import java.util
+
 import com.stream.task.{Single, Task}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.streaming.{Duration, StreamingContext}
 
 import scala.annotation.meta.param
-import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 class SimpleStreamingContext(@(transient@param) ss: SparkSession,
@@ -18,8 +19,8 @@ class SimpleStreamingContext(@(transient@param) ss: SparkSession,
 
   def simpleTaskDStream[U:ClassTag](task: Task, tables: String, requiredFactors: Seq[String])(f: (T, U) => U) = {
     val rdd = simpleRDD(task, tables, requiredFactors, f)
-    val arr = new ArrayBuffer[RDD[U]]()
-    arr += rdd.asInstanceOf[RDD[U]]
+    val arr = new util.ArrayDeque[RDD[U]]()
+    arr.add(rdd.asInstanceOf[RDD[U]])
     new SimpleDStream(this, arr)
   }
 

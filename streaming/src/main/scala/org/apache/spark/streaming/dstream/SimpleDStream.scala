@@ -1,5 +1,6 @@
 package org.apache.spark.streaming.dstream
 
+import java.util
 import java.util.concurrent.CountDownLatch
 
 import org.apache.spark.rdd.{RDD, SimpleUnionRDD}
@@ -7,10 +8,9 @@ import org.apache.spark.streaming.scheduler.Job
 import org.apache.spark.streaming.{StreamingContext, Time}
 import org.apache.spark.util.ThreadUtils
 
-import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-class SimpleDStream[T: ClassTag](_ssc: StreamingContext, buffer: ArrayBuffer[RDD[T]]) extends InputDStream[T](_ssc) {
+class SimpleDStream[T: ClassTag](_ssc: StreamingContext, buffer: util.Queue[RDD[T]]) extends InputDStream[T](_ssc) {
 
   override def slideDuration = {
     if (ssc == null) throw new Exception("ssc is null")
@@ -21,11 +21,13 @@ class SimpleDStream[T: ClassTag](_ssc: StreamingContext, buffer: ArrayBuffer[RDD
   override def dependencies = List()
 
   override def compute(validTime: Time) = {
-    val tmp = new ArrayBuffer[RDD[T]]()
-    tmp ++= buffer
+    import collection.JavaConverters._
+    val tmp = new util.ArrayDeque[RDD[T]]()
+    tmp.addAll(buffer)
     buffer.clear()
-    if (tmp.nonEmpty) {
-      Some(new SimpleUnionRDD(_ssc.sparkContext, tmp))
+    if (!tmp.isEmpty) {
+      val rddSeq = tmp.asScala.toSeq
+      Some(new SimpleUnionRDD(_ssc.sparkContext, rddSeq))
     } else {
       Some(_ssc.sparkContext.emptyRDD)
     }
