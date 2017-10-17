@@ -1,43 +1,56 @@
 package com.service.impl
 
-import com.service.Simple
-import com.service.impl.SimpleImpl._
+import com.service.impl.SimpleService._
+import com.service.{Service, ServiceComponent, Simple, SimpleComponent}
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.streaming.Seconds
-import org.apache.spark.streaming.dstream.{SimpleDStream, SimpleStreamingContext}
+import org.apache.spark.streaming.dstream.SimpleStreamingContext
 import org.apache.spark.utils.test.KafkaTestUtils
 
 import scala.collection.mutable.ArrayBuffer
 
 //@Component("simpleService")
-trait SimpleImpl extends Simple {
+trait SimpleService extends SimpleComponent with ServiceComponent {
+  self: Simple with Service =>
 
   val tmp = ArrayBuffer.empty[String]
 
-  def submitTask(sqlText: String) = {
+  def submitTask(sqlText: String): Unit = {
     arr.synchronized {
       arr += sql(sqlText).rdd
     }
   }
 
-  def sendMessage(topic: String, id: Int, name: String, age: Int): Unit = {
+  def sendMessage(topic: String, id: Int, name: String, age: Int, cacheProducer: Boolean): Unit = {
     kafkaTestUtils.sendMessages(topic, Array(id + "\t" + name + "\t" + age))
+    if (!cacheProducer)
+      kafkaTestUtils.closeProducer(topic)
   }
 
   def sql(sqlText: String) = ssc.sql(sqlText)
 
-  def getResults: Array[String] = {
+  def get(): Seq[String] = {
     tmp ++= results
-    if (results.nonEmpty) results.clear()
-    val res = tmp.toArray
-    tmp.clear()
-    res
+    if (results.nonEmpty)
+      results.synchronized(results.clear())
+    tmp
   }
+
+  def startStream() = {
+    ssc.start()
+    new Thread(new Runnable {
+      override def run(): Unit = {
+        ssc.awaitTermination()
+      }
+    })
+  }
+
+  def stopAll() = ssc.stop(stopSparkContext = true, stopGracefully = true)
 }
 
-object SimpleImpl {
+object SimpleService {
   private val sparkConf = new SparkConf().setAppName("simple").setMaster("local[*]")
   private val ss = SparkSession.builder().config(sparkConf).getOrCreate()
   val arr = ArrayBuffer.empty[RDD[Row]]
@@ -48,19 +61,6 @@ object SimpleImpl {
   private val kafkaTestUtils = new KafkaTestUtils
   kafkaTestUtils.setup()
   createKafkaTable("test")
-
-  val stream = new SimpleDStream(ssc, arr)
-  stream.foreachRDD(_.filter(_ != null).foreachPartition {
-    _.foreach { row =>
-      results += row.toString()
-    }
-  })
-  ssc.start()
-  new Thread(new Runnable {
-    override def run(): Unit = {
-      ssc.awaitTermination()
-    }
-  })
 
   private def createKafkaTable(table: String) = {
     ss.sql(

@@ -4,20 +4,27 @@ import org.apache.spark.sql.DataFrame
 
 trait Simple {
 
-  def submitTask(sqlText: String)
+  protected def submitTask(sqlText: String): Unit
 
-  def sendMessage(topic: String, id: Int, name: String, age: Int)
+  protected def sendMessage(topic: String, id: Int, name: String, age: Int,cacheProducer:Boolean): Unit
 
-  def sql(sqlText: String): DataFrame
+  protected def sql(sqlText: String): DataFrame
 }
 
-trait SimpleService {
+trait SimpleComponent {
   self: Simple =>
 
-  def submit(sqlText: String) = self.submitTask(sqlText)
+  protected def submit(sqlText: String) = self.submitTask(sqlText)
 
-  def put(topic: String, id: Int, name: String, age: Int): Unit =self.sendMessage(topic, id, name, age)
+  protected def put(topic: String, id: Int, name: String, age: Int): Unit = self.sendMessage(topic, id, name, age,cacheProducer = true)
 
-  def get(): String
+}
 
+trait Service {
+  protected def get(): Seq[String]
+}
+
+trait ServiceComponent {
+  self: Service =>
+  protected def getResult():Seq[String] = self.get()
 }

@@ -5,12 +5,12 @@ import javax.ws.rs._
 import javax.ws.rs.core.MediaType
 
 import com.alibaba.fastjson.{JSON, JSONObject}
-import com.service.impl.SimpleImpl
+import com.service.impl.SimpleService
 import com.service.response.BaseResponse
 import org.springframework.web.bind.annotation.RequestParam
 
 //@Service("restSimpleService")
-class SimpleWebService extends SimpleImpl with SimpleService {
+class SimpleWebService extends SimpleService with Simple with Service {
   //  @Autowired
   //  @Qualifier("simpleService")
   //  val simpleService: SimpleWebServiceImpl = new SimpleWebServiceImpl
@@ -19,32 +19,32 @@ class SimpleWebService extends SimpleImpl with SimpleService {
   @Path("/admin")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   @Produces(Array(MediaType.TEXT_PLAIN))
-  def executeSql(@RequestParam sqlText: String): String = tryJSONResponse {
-    val df = sql(sqlText)
+  def getTableSchema(@RequestParam sqlText: String): String = tryJSONResponse {
+    val df = super.sql(sqlText)
     ("succeed", df.schema.map(_.name))
   }
 
   @GET
   @Path("/sql/{sqlText}")
   def submitSqlTask(@PathParam("sqlText") sqlText: String): String = tryJSONResponse {
-    submit(sqlText)
+    super.submit(sqlText)
     ("submit task succeed", null)
   }
 
   @GET
   @Path("/msg/{topic}/{id}/{name}/{age}")
-  def putIntoKafka(@PathParam("topic") topic: String,
+  def putMessage(@PathParam("topic") topic: String,
                    @PathParam("id") id: Int,
                    @PathParam("name") name: String,
                    @PathParam("age") age: Int) = tryJSONResponse {
-    sendMessage(topic, id, name, age)
+    super.put(topic, id, name, age)
     ("insert succeed", null)
   }
 
   @GET
   @Path("/results")
-  def get() = tryJSONResponse {
-    ("get result succeed", getResults)
+  def getJSONResults(): String = tryJSONResponse {
+    ("get result succeed", getResult())
   }
 
   private def tryJSONResponse(f: => (String, Seq[String])): String = {

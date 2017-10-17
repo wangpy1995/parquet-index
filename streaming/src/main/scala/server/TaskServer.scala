@@ -9,7 +9,7 @@ object TaskServer {
   val CONTEXT = "webContent"
   val DEFAULT_APP_PATH ="streaming/web"
 
-  def main(args: Array[String]): Unit = {
+  def startServer()={
     val server = new Server()
 
     val connector = new SelectChannelConnector()
@@ -25,5 +25,9 @@ object TaskServer {
 
     server.start()
     server.join()
+  }
+
+  def main(args: Array[String]): Unit = {
+    startServer()
   }
 }
